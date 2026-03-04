@@ -1,3 +1,6 @@
+import { config } from "dotenv";
+import { resolve } from "path";
+config({ path: resolve(process.cwd(), "../../.env") });
 import { createCsvImportWorker } from "./workers/csv-import.worker";
 import { createAuditWorker } from "./workers/audit.worker";
 import { createNotificationWorker } from "./workers/notification.worker";

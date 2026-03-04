@@ -1,4 +1,7 @@
-import "dotenv/config";
+import { config } from "dotenv";
+import { resolve } from "path";
+// Load .env from project root (2 levels up from apps/api)
+config({ path: resolve(process.cwd(), "../../.env") });
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
