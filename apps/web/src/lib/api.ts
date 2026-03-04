@@ -1,7 +1,8 @@
 import axios, { AxiosError } from "axios";
 
-// Accepts either a base URL (https://api.example.com) or a full path (http://localhost:4000/api/v1)
-const _base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+// Accepts a full URL, base URL, or bare hostname (Render fromService gives bare host)
+const _raw = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const _base = _raw.startsWith("http") ? _raw : `https://${_raw}`;
 const API_URL = _base.endsWith("/api/v1") ? _base : `${_base}/api/v1`;
 
 export const api = axios.create({
