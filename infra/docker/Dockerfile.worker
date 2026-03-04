@@ -1,0 +1,32 @@
+FROM node:20-alpine AS base
+RUN npm install -g pnpm@9
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/worker/package.json ./apps/worker/
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS builder
+COPY packages/database ./packages/database
+COPY packages/shared ./packages/shared
+COPY apps/worker ./apps/worker
+COPY tsconfig.base.json ./
+RUN cd packages/database && npx prisma generate
+RUN pnpm --filter @opensales/worker build
+
+FROM node:20-alpine AS runner
+RUN npm install -g pnpm@9
+WORKDIR /app
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodejs
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
+COPY --from=builder /app/apps/worker/package.json ./apps/worker/package.json
+
+USER nodejs
+CMD ["node", "apps/worker/dist/index.js"]

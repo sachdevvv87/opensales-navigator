@@ -1,0 +1,438 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  MANAGER
+  SALES_REP
+  VIEWER
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+}
+
+enum Seniority {
+  C_SUITE
+  VP
+  DIRECTOR
+  MANAGER
+  IC
+  ENTRY
+  UNKNOWN
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  EMAIL
+  TASK
+  MEETING
+  STAGE_CHANGE
+}
+
+enum ListType {
+  STATIC
+  SMART
+}
+
+enum ListPermission {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum CompanyType {
+  PUBLIC
+  PRIVATE
+  NONPROFIT
+  GOVERNMENT
+  UNKNOWN
+}
+
+enum AccountTier {
+  STRATEGIC
+  KEY
+  STANDARD
+}
+
+enum FundingStage {
+  BOOTSTRAPPED
+  PRE_SEED
+  SEED
+  SERIES_A
+  SERIES_B
+  SERIES_C
+  SERIES_D_PLUS
+  PUBLIC
+  UNKNOWN
+}
+
+// ─── ORGANIZATIONS ────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users         User[]
+  invitations   Invitation[]
+  contacts      Contact[]
+  companies     Company[]
+  lists         List[]
+  savedSearches SavedSearch[]
+  activities    Activity[]
+  notifications Notification[]
+  alertRules    AlertRule[]
+  auditLogs     AuditLog[]
+
+  @@map("organizations")
+}
+
+// ─── USERS ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  orgId         String    @map("org_id")
+  email         String
+  name          String
+  passwordHash  String    @map("password_hash")
+  role          UserRole  @default(SALES_REP)
+  avatarUrl     String?   @map("avatar_url")
+  twoFaSecret   String?   @map("two_fa_secret")
+  twoFaEnabled  Boolean   @default(false) @map("two_fa_enabled")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  org               Organization   @relation(fields: [orgId], references: [id])
+  assignedContacts  Contact[]      @relation("AssignedContacts")
+  createdContacts   Contact[]      @relation("CreatedContacts")
+  ownedCompanies    Company[]
+  activities        Activity[]
+  notifications     Notification[]
+  listPermissions   ListPermission_[]
+  savedSearches     SavedSearch[]
+  auditLogs         AuditLog[]
+
+  @@unique([orgId, email])
+  @@index([orgId])
+  @@map("users")
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  orgId       String    @map("org_id")
+  email       String
+  role        UserRole  @default(SALES_REP)
+  token       String    @unique
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@map("invitations")
+}
+
+// ─── COMPANIES ────────────────────────────────────────────────────────────────
+
+model Company {
+  id              String      @id @default(cuid())
+  orgId           String      @map("org_id")
+  name            String
+  domain          String?
+  website         String?
+  logoUrl         String?     @map("logo_url")
+  linkedinUrl     String?     @map("linkedin_url")
+  description     String?
+  industry        String?
+  employeeCount   Int?        @map("employee_count")
+  revenueRange    String?     @map("revenue_range")
+  foundedYear     Int?        @map("founded_year")
+  companyType     CompanyType @default(UNKNOWN) @map("company_type")
+  hqCity          String?     @map("hq_city")
+  hqCountry       String?     @map("hq_country")
+  techStack       String[]    @map("tech_stack")
+  fundingStage    FundingStage @default(UNKNOWN) @map("funding_stage")
+  totalRaised     BigInt?     @map("total_raised")
+  accountOwnerId  String?     @map("account_owner_id")
+  accountTier     AccountTier @default(STANDARD) @map("account_tier")
+  healthScore     Int         @default(50) @map("health_score")
+  enrichmentData  Json?       @map("enrichment_data")
+  customFields    Json?       @map("custom_fields")
+  lastEnrichedAt  DateTime?   @map("last_enriched_at")
+  createdBy       String      @map("created_by")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  deletedAt       DateTime?   @map("deleted_at")
+
+  org          Organization @relation(fields: [orgId], references: [id])
+  accountOwner User?        @relation(fields: [accountOwnerId], references: [id])
+  contacts     Contact[]
+  activities   Activity[]   @relation("CompanyActivities")
+  listMembers  ListMemberCompany[]
+
+  @@index([orgId])
+  @@index([domain])
+  @@map("companies")
+}
+
+// ─── CONTACTS ────────────────────────────────────────────────────────────────
+
+model Contact {
+  id              String     @id @default(cuid())
+  orgId           String     @map("org_id")
+  firstName       String     @map("first_name")
+  lastName        String     @map("last_name")
+  email           String?
+  emailVerified   Boolean    @default(false) @map("email_verified")
+  phone           String?
+  title           String?
+  seniority       Seniority  @default(UNKNOWN)
+  department      String?
+  linkedinUrl     String?    @map("linkedin_url")
+  twitterUrl      String?    @map("twitter_url")
+  avatarUrl       String?    @map("avatar_url")
+  companyId       String?    @map("company_id")
+  locationCity    String?    @map("location_city")
+  locationCountry String?    @map("location_country")
+  leadScore       Int        @default(0) @map("lead_score")
+  leadStage       LeadStage  @default(NEW) @map("lead_stage")
+  assignedToId    String?    @map("assigned_to_id")
+  source          String?
+  tags            String[]
+  lastContactedAt DateTime?  @map("last_contacted_at")
+  lastEnrichedAt  DateTime?  @map("last_enriched_at")
+  enrichmentData  Json?      @map("enrichment_data")
+  customFields    Json?      @map("custom_fields")
+  createdById     String     @map("created_by")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  org         Organization @relation(fields: [orgId], references: [id])
+  assignedTo  User?        @relation("AssignedContacts", fields: [assignedToId], references: [id])
+  createdBy   User         @relation("CreatedContacts", fields: [createdById], references: [id])
+  company     Company?     @relation(fields: [companyId], references: [id])
+  emails      ContactEmail[]
+  phones      ContactPhone[]
+  activities  Activity[]   @relation("ContactActivities")
+  listMembers ListMemberContact[]
+
+  @@index([orgId])
+  @@index([email])
+  @@index([companyId])
+  @@map("contacts")
+}
+
+model ContactEmail {
+  id        String  @id @default(cuid())
+  contactId String  @map("contact_id")
+  email     String
+  type      String  @default("work")
+  verified  Boolean @default(false)
+  primary   Boolean @default(false)
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@map("contact_emails")
+}
+
+model ContactPhone {
+  id        String  @id @default(cuid())
+  contactId String  @map("contact_id")
+  phone     String
+  type      String  @default("work")
+  primary   Boolean @default(false)
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@map("contact_phones")
+}
+
+// ─── LISTS ────────────────────────────────────────────────────────────────────
+
+model List {
+  id           String   @id @default(cuid())
+  orgId        String   @map("org_id")
+  name         String
+  description  String?
+  type         ListType @default(STATIC)
+  filterConfig Json?    @map("filter_config")
+  ownerId      String   @map("owner_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  org             Organization        @relation(fields: [orgId], references: [id])
+  contactMembers  ListMemberContact[]
+  companyMembers  ListMemberCompany[]
+  permissions     ListPermission_[]
+
+  @@index([orgId])
+  @@map("lists")
+}
+
+model ListMemberContact {
+  listId    String   @map("list_id")
+  contactId String   @map("contact_id")
+  addedAt   DateTime @default(now()) @map("added_at")
+  addedBy   String   @map("added_by")
+
+  list    List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([listId, contactId])
+  @@map("list_members_contacts")
+}
+
+model ListMemberCompany {
+  listId    String   @map("list_id")
+  companyId String   @map("company_id")
+  addedAt   DateTime @default(now()) @map("added_at")
+  addedBy   String   @map("added_by")
+
+  list    List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([listId, companyId])
+  @@map("list_members_companies")
+}
+
+model ListPermission_ {
+  listId     String         @map("list_id")
+  userId     String         @map("user_id")
+  permission ListPermission @default(VIEWER)
+
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([listId, userId])
+  @@map("list_permissions")
+}
+
+// ─── SAVED SEARCHES ───────────────────────────────────────────────────────────
+
+model SavedSearch {
+  id           String   @id @default(cuid())
+  orgId        String   @map("org_id")
+  name         String
+  entityType   String   @map("entity_type")
+  filterConfig Json     @map("filter_config")
+  alertEnabled Boolean  @default(false) @map("alert_enabled")
+  ownerId      String   @map("owner_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  org        Organization @relation(fields: [orgId], references: [id])
+  owner      User         @relation(fields: [ownerId], references: [id])
+  alertRules AlertRule[]
+
+  @@index([orgId])
+  @@map("saved_searches")
+}
+
+// ─── ACTIVITIES ───────────────────────────────────────────────────────────────
+
+model Activity {
+  id          String       @id @default(cuid())
+  orgId       String       @map("org_id")
+  entityType  String       @map("entity_type")
+  contactId   String?      @map("contact_id")
+  companyId   String?      @map("company_id")
+  type        ActivityType
+  body        String?
+  metadata    Json?
+  dueAt       DateTime?    @map("due_at")
+  completedAt DateTime?    @map("completed_at")
+  createdById String       @map("created_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  org       Organization @relation(fields: [orgId], references: [id])
+  contact   Contact?     @relation("ContactActivities", fields: [contactId], references: [id])
+  company   Company?     @relation("CompanyActivities", fields: [companyId], references: [id])
+  createdBy User         @relation(fields: [createdById], references: [id])
+
+  @@index([orgId])
+  @@index([contactId])
+  @@index([companyId])
+  @@map("activities")
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  orgId     String    @map("org_id")
+  userId    String    @map("user_id")
+  type      String
+  title     String
+  body      String
+  readAt    DateTime? @map("read_at")
+  data      Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  org  Organization @relation(fields: [orgId], references: [id])
+  user User         @relation(fields: [userId], references: [id])
+
+  @@index([orgId, userId])
+  @@map("notifications")
+}
+
+model AlertRule {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  savedSearchId   String    @map("saved_search_id")
+  channels        Json      @default("{}")
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  org         Organization @relation(fields: [orgId], references: [id])
+  savedSearch SavedSearch  @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("alert_rules")
+}
+
+// ─── AUDIT ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  orgId      String   @map("org_id")
+  userId     String   @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  diff       Json?
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  org  Organization @relation(fields: [orgId], references: [id])
+  user User         @relation(fields: [userId], references: [id])
+
+  @@index([orgId])
+  @@index([entityType, entityId])
+  @@map("audit_log")
+}

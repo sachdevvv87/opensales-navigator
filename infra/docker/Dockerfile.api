@@ -1,0 +1,40 @@
+FROM node:20-alpine AS base
+RUN npm install -g pnpm@9
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/api/package.json ./apps/api/
+RUN pnpm install --frozen-lockfile
+
+# Build
+FROM deps AS builder
+COPY packages/database ./packages/database
+COPY packages/shared ./packages/shared
+COPY apps/api ./apps/api
+COPY tsconfig.base.json ./
+RUN cd packages/database && npx prisma generate
+RUN pnpm --filter @opensales/database build || true
+RUN pnpm --filter @opensales/shared build || true
+RUN pnpm --filter @opensales/api build
+
+# Production image
+FROM node:20-alpine AS runner
+RUN npm install -g pnpm@9
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nodejs
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+
+USER nodejs
+EXPOSE 4000
+CMD ["node", "apps/api/dist/index.js"]
