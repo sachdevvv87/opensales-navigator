@@ -1,0 +1,17 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = [
+  "npm install -g pnpm@9",
+  "pnpm install --frozen-lockfile"
+]
+
+[phases.build]
+cmds = [
+  "pnpm --filter @opensales/database db:generate",
+  "pnpm --filter @opensales/api build"
+]
+
+[start]
+cmd = "node dist/index.js"
