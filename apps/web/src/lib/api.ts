@@ -1,6 +1,8 @@
 import axios, { AxiosError } from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+// Accepts either a base URL (https://api.example.com) or a full path (http://localhost:4000/api/v1)
+const _base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = _base.endsWith("/api/v1") ? _base : `${_base}/api/v1`;
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -52,7 +54,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken }); // API_URL already has /api/v1
         localStorage.setItem("accessToken", data.accessToken);
         localStorage.setItem("refreshToken", data.refreshToken);
         api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
