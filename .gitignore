@@ -48,4 +48,3 @@ docker-data/
 
 # MinIO data
 minio-data/
-.github/workflows/
