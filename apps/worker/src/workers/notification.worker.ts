@@ -2,6 +2,7 @@ import { Worker, Job } from "bullmq";
 import { prisma } from "@opensales/database";
 import { getRedisConnection } from "../redis";
 import type { NotificationJobData } from "../queues";
+import { sendEmail, buildNotificationEmailHtml } from "../email.service";
 
 export function createNotificationWorker() {
   const worker = new Worker<NotificationJobData>(
@@ -17,7 +18,30 @@ export function createNotificationWorker() {
 
       // 2. Email delivery (if configured)
       if (channels?.email) {
-        console.log(`[notification] Email delivery queued for user ${userId}: ${title}`);
+        try {
+          const [org, user] = await Promise.all([
+            (prisma.organization as any).findUnique({ where: { id: orgId }, select: { settings: true } }),
+            prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+          ]);
+          const smtp = (org?.settings as any)?.smtp;
+          if (smtp?.host && smtp?.user && smtp?.password && user?.email) {
+            await sendEmail(
+              {
+                host: smtp.host,
+                port: smtp.port ?? 587,
+                secure: smtp.secure ?? false,
+                user: smtp.user,
+                password: smtp.password,
+                from: smtp.from ?? smtp.user,
+              },
+              user.email,
+              title,
+              buildNotificationEmailHtml(title, body)
+            );
+          }
+        } catch (err) {
+          console.error(`[notification] Email delivery failed:`, err);
+        }
       }
 
       // 3. Slack webhook (if configured)

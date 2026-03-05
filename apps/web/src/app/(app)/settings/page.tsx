@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { User, Building2, Users, Zap } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@opensales/ui";
+import { User, Building2, Users, Zap, Bell } from "lucide-react";
+import { Card, CardDescription, CardHeader, CardTitle } from "@opensales/ui";
 
 const settingsSections = [
   { href: "/settings/profile", title: "Profile", description: "Update your name, email, and password", icon: User },
   { href: "/settings/organization", title: "Organization", description: "Manage your workspace name and settings", icon: Building2 },
   { href: "/settings/team", title: "Team", description: "Invite team members and manage roles", icon: Users },
   { href: "/integrations", title: "Integrations", description: "Connect CRM tools and enrichment APIs", icon: Zap },
+  { href: "/settings/notifications", title: "Notifications", description: "Configure SMTP, Slack, and webhook alerts", icon: Bell },
 ];
 
 export default function SettingsPage() {

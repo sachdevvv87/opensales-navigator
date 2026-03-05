@@ -101,7 +101,8 @@ model Organization {
   activities    Activity[]
   notifications Notification[]
   alertRules    AlertRule[]
-  auditLogs     AuditLog[]
+  auditLogs      AuditLog[]
+  crmConnections CrmConnection[]
 
   @@map("organizations")
 }
@@ -435,4 +436,43 @@ model AuditLog {
   @@index([orgId])
   @@index([entityType, entityId])
   @@map("audit_log")
+}
+
+// ─── CRM CONNECTIONS ──────────────────────────────────────────────────────────
+
+model CrmConnection {
+  id              String    @id @default(cuid())
+  orgId           String    @map("org_id")
+  crmType         String    @map("crm_type")
+  credentialsJson Json      @map("credentials_json")
+  fieldMapping    Json      @default("{}") @map("field_mapping")
+  syncEnabled     Boolean   @default(true) @map("sync_enabled")
+  lastSyncAt      DateTime? @map("last_sync_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  syncLogs CrmSyncLog[]
+
+  @@unique([orgId, crmType])
+  @@index([orgId])
+  @@map("crm_connections")
+}
+
+model CrmSyncLog {
+  id           String   @id @default(cuid())
+  connectionId String   @map("connection_id")
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  direction    String   @default("push")
+  status       String
+  error        String?
+  externalId   String?  @map("external_id")
+  syncedAt     DateTime @default(now()) @map("synced_at")
+
+  connection CrmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([entityType, entityId])
+  @@map("crm_sync_log")
 }

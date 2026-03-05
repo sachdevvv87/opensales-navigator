@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, X, Search, Download, AlertTriangle } from "lucide-react";
+import { Eye, EyeOff, X, Search, Download, AlertTriangle, RefreshCw, Unplug, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -34,6 +34,7 @@ import {
   type IcpConfig,
   type ProspectResult,
 } from "@/hooks/useEnrichment";
+import { useCrmConnections, useDisconnectCrm, useSyncCrm, useCrmSyncLog } from "@/hooks/useCrm";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -552,6 +553,136 @@ function IcpForm({ initialIcp }: { initialIcp: IcpConfig }) {
   );
 }
 
+// ── HubSpot CRM Card ──────────────────────────────────────────────────────────
+
+function HubSpotCard() {
+  const { data: connections = [], isLoading } = useCrmConnections();
+  const disconnect = useDisconnectCrm();
+  const sync = useSyncCrm();
+  const connection = connections.find((c) => c.crmType === "hubspot");
+  const { data: syncLog = [] } = useCrmSyncLog("hubspot", !!connection);
+  const [logOpen, setLogOpen] = useState(false);
+
+  async function handleConnect() {
+    try {
+      const res = await fetch("/api/v1/crm/hubspot/oauth/url", {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token") ?? ""}` },
+      });
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch {
+      toast.error("Could not get HubSpot auth URL");
+    }
+  }
+
+  function handleDisconnect() {
+    disconnect.mutate("hubspot", {
+      onSuccess: () => toast.success("HubSpot disconnected"),
+      onError: () => toast.error("Failed to disconnect"),
+    });
+  }
+
+  function handleSync() {
+    sync.mutate("hubspot", {
+      onSuccess: (result) =>
+        toast.success(`Sync complete — ${result.pushed} pushed, ${result.failed} failed`),
+      onError: () => toast.error("Sync failed"),
+    });
+  }
+
+  if (isLoading) return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Loading…</CardContent></Card>;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base">HubSpot</CardTitle>
+          {connection ? (
+            <Badge variant="success" className="text-xs shrink-0">Connected</Badge>
+          ) : (
+            <Badge variant="secondary" className="text-xs shrink-0">Not connected</Badge>
+          )}
+        </div>
+        <CardDescription>Two-way contact &amp; company sync with HubSpot CRM.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {connection ? (
+          <>
+            {connection.lastSyncAt && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                Last synced {new Date(connection.lastSyncAt).toLocaleString()}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={handleSync} disabled={sync.isPending} className="gap-1.5">
+                <RefreshCw className={`h-3.5 w-3.5 ${sync.isPending ? "animate-spin" : ""}`} />
+                {sync.isPending ? "Syncing…" : "Sync Now"}
+              </Button>
+              <Dialog open={logOpen} onOpenChange={setLogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="ghost">View Log</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>HubSpot Sync Log</DialogTitle>
+                  </DialogHeader>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Entity</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>External ID</TableHead>
+                        <TableHead>When</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {syncLog.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                            No sync records yet.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        syncLog.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="font-mono text-xs max-w-[100px] truncate">{row.entityId}</TableCell>
+                            <TableCell className="text-xs">{row.entityType}</TableCell>
+                            <TableCell>
+                              {row.status === "success" ? (
+                                <Badge variant="success" className="text-xs">OK</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-xs" title={row.error ?? ""}>Error</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{row.externalId ?? "—"}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(row.syncedAt).toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </DialogContent>
+              </Dialog>
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive gap-1.5" onClick={handleDisconnect} disabled={disconnect.isPending}>
+                <Unplug className="h-3.5 w-3.5" />
+                Disconnect
+              </Button>
+            </div>
+          </>
+        ) : (
+          <Button size="sm" onClick={handleConnect} className="gap-2">
+            Connect HubSpot
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
@@ -589,8 +720,7 @@ export default function IntegrationsPage() {
     { provider: "clearbit", name: "Clearbit", description: "Enrich company profiles with firmographic data." },
   ];
 
-  const crmProviders = [
-    { name: "HubSpot", description: "Two-way contact & company sync" },
+  const comingSoonCrm = [
     { name: "Salesforce", description: "Sync leads, contacts, and opportunities" },
     { name: "Pipedrive", description: "Sync contacts and deals" },
   ];
@@ -624,7 +754,31 @@ export default function IntegrationsPage() {
               isSaving={savingProvider === provider && isSavingKeys}
             />
           ))}
-          {crmProviders.map(({ name, description }) => (
+          {comingSoonCrm.map(({ name, description }) => (
+            <Card key={name} className="opacity-60">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-base">{name}</CardTitle>
+                  <Badge variant="secondary" className="text-xs shrink-0">Coming Soon</Badge>
+                </div>
+                <CardDescription>{description}</CardDescription>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* CRM Connections */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">CRM Connections</h2>
+          <p className="text-sm text-muted-foreground">
+            Connect your CRM to sync contacts and companies automatically.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <HubSpotCard />
+          {comingSoonCrm.map(({ name, description }) => (
             <Card key={name} className="opacity-60">
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
