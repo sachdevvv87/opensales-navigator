@@ -27,6 +27,26 @@ export async function listContacts(
   if (filters.locationCountry?.length) where.locationCountry = { in: filters.locationCountry };
   if (filters.hasEmail === true) where.email = { not: null };
   if (filters.hasEmail === false) where.email = null;
+  // leadScore range
+  if (filters.leadScoreMin !== undefined && filters.leadScoreMax !== undefined) {
+    where.leadScore = { gte: filters.leadScoreMin, lte: filters.leadScoreMax };
+  } else if (filters.leadScoreMin !== undefined) {
+    where.leadScore = { gte: filters.leadScoreMin };
+  } else if (filters.leadScoreMax !== undefined) {
+    where.leadScore = { lte: filters.leadScoreMax };
+  }
+  // hasPhone
+  if (filters.hasPhone === true) where.phones = { some: {} };
+  if (filters.hasPhone === false) where.phones = { none: {} };
+  // department
+  if (filters.department?.length) where.department = { in: filters.department };
+  // createdAt range
+  if (filters.createdAfter) where.createdAt = { gte: new Date(filters.createdAfter) };
+  if (filters.createdBefore) {
+    where.createdAt = { ...((where.createdAt as object) ?? {}), lte: new Date(filters.createdBefore) };
+  }
+  // listId
+  if (filters.listId) where.listMembers = { some: { listId: filters.listId } };
 
   const skip = (pagination.page - 1) * pagination.limit;
   const sortField = pagination.sortBy ?? "createdAt";

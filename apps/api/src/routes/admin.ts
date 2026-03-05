@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import { requireRole, orgScope } from "../plugins/auth";
+import { requireRole, requireAuth, orgScope, JWTPayload } from "../plugins/auth";
 import { prisma } from "@opensales/database";
 import { hashPassword, generateInviteToken } from "../services/auth.service";
 
@@ -31,20 +31,74 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /admin/settings
   fastify.get("/settings", { preHandler: requireRole("ORG_ADMIN") }, async (request) => {
-    return prisma.organization.findUnique({
+    const org = await prisma.organization.findUnique({
       where: { id: orgScope(request) },
       select: { id: true, name: true, slug: true, settings: true },
     });
+    if (!org) return null;
+    // Strip sensitive apiKeys from response
+    const { apiKeys, ...publicSettings } = (org.settings as Record<string, any>) ?? {};
+    return { ...org, settings: publicSettings };
   });
 
   // PATCH /admin/settings
   fastify.patch("/settings", { preHandler: requireRole("ORG_ADMIN") }, async (request) => {
-    const body = request.body as { name?: string; settings?: object };
-    return prisma.organization.update({
-      where: { id: orgScope(request) },
-      data: { name: body.name, settings: body.settings },
+    const body = request.body as { name?: string; settings?: Record<string, any>; apiKeys?: Record<string, string> };
+    const orgId = orgScope(request);
+
+    // Load existing settings for deep merge
+    const existing = await prisma.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
+    const existingSettings = (existing?.settings as Record<string, any>) ?? {};
+
+    // Merge incoming public settings on top of existing, then re-apply stored apiKeys
+    const mergedSettings: Record<string, any> = {
+      ...existingSettings,
+      ...(body.settings ?? {}),
+    };
+
+    // Merge apiKeys if provided (store them but never expose in GET)
+    if (body.apiKeys) {
+      mergedSettings.apiKeys = {
+        ...(existingSettings.apiKeys ?? {}),
+        ...body.apiKeys,
+      };
+    }
+
+    const org = await prisma.organization.update({
+      where: { id: orgId },
+      data: { name: body.name, settings: mergedSettings },
       select: { id: true, name: true, slug: true, settings: true },
     });
+
+    // Strip apiKeys from response
+    const { apiKeys, ...publicSettings } = (org.settings as Record<string, any>) ?? {};
+    return { ...org, settings: publicSettings };
+  });
+
+  // POST /admin/settings/test-integration
+  fastify.post("/settings/test-integration", { preHandler: [requireAuth] }, async (request, reply) => {
+    const { orgId } = request.user as JWTPayload;
+    const { provider, apiKey } = request.body as { provider: "apollo" | "hunter" | "clearbit"; apiKey: string };
+
+    try {
+      if (provider === "apollo") {
+        const res = await fetch("https://api.apollo.io/v1/auth/health", {
+          headers: { "Cache-Control": "no-cache", "Content-Type": "application/json", "X-Api-Key": apiKey },
+        });
+        if (!res.ok) return reply.code(400).send({ error: "Invalid Apollo API key" });
+      } else if (provider === "hunter") {
+        const res = await fetch(`https://api.hunter.io/v2/account?api_key=${apiKey}`);
+        if (!res.ok) return reply.code(400).send({ error: "Invalid Hunter.io API key" });
+      } else if (provider === "clearbit") {
+        const res = await fetch("https://company.clearbit.com/v2/companies/find?domain=clearbit.com", {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        if (res.status === 401) return reply.code(400).send({ error: "Invalid Clearbit API key" });
+      }
+      return { success: true, message: `${provider} connection verified` };
+    } catch (e) {
+      return reply.code(500).send({ error: "Connection test failed" });
+    }
   });
 
   // GET /admin/analytics/dashboard

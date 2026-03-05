@@ -28,15 +28,40 @@ export interface ContactsParams {
   limit?: number;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
-  leadStage?: string;
-  assignedToId?: string;
+  leadStage?: string[];
+  seniority?: string[];
+  department?: string[];
+  locationCountry?: string[];
+  assignedToId?: string[];
+  tags?: string[];
+  leadScoreMin?: number;
+  leadScoreMax?: number;
+  hasEmail?: boolean;
+  hasPhone?: boolean;
+  createdAfter?: string;
+  createdBefore?: string;
+  listId?: string;
+}
+
+function serializeParams(params: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      value.forEach((v) => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`));
+    } else {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  return parts.join("&");
 }
 
 export function useContacts(params: ContactsParams = {}) {
   return useQuery({
     queryKey: ["contacts", params],
     queryFn: async () => {
-      const { data } = await api.get("/contacts", { params });
+      const queryString = serializeParams(params as Record<string, unknown>);
+      const { data } = await api.get(`/contacts${queryString ? `?${queryString}` : ""}`);
       return data as { data: Contact[]; pagination: { total: number; page: number; limit: number; totalPages: number; hasNext: boolean; hasPrev: boolean } };
     },
   });

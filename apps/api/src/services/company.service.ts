@@ -1,4 +1,4 @@
-import { prisma } from "@opensales/database";
+import { prisma, Prisma } from "@opensales/database";
 import { CompanyCreateInput, CompanyUpdateInput, CompanyFilterInput, PaginationInput } from "@opensales/shared";
 
 export async function listCompanies(
@@ -6,25 +6,29 @@ export async function listCompanies(
   filters: CompanyFilterInput,
   pagination: PaginationInput
 ) {
-  const where: Record<string, unknown> = { orgId, deletedAt: null };
-
-  if (filters.search) {
-    where.OR = [
-      { name: { contains: filters.search, mode: "insensitive" } },
-      { domain: { contains: filters.search, mode: "insensitive" } },
-      { industry: { contains: filters.search, mode: "insensitive" } },
-    ];
-  }
-  if (filters.industry?.length) where.industry = { in: filters.industry };
-  if (filters.companyType?.length) where.companyType = { in: filters.companyType };
-  if (filters.accountTier?.length) where.accountTier = { in: filters.accountTier };
-  if (filters.fundingStage?.length) where.fundingStage = { in: filters.fundingStage };
-  if (filters.hqCountry?.length) where.hqCountry = { in: filters.hqCountry };
-  if (filters.accountOwnerId?.length) where.accountOwnerId = { in: filters.accountOwnerId };
-  if (filters.employeeCountMin != null) where.employeeCount = { gte: filters.employeeCountMin };
-  if (filters.employeeCountMax != null) {
-    where.employeeCount = { ...((where.employeeCount as object) ?? {}), lte: filters.employeeCountMax };
-  }
+  const where: Prisma.CompanyWhereInput = {
+    orgId,
+    deletedAt: null,
+    ...(filters.search && {
+      OR: [
+        { name: { contains: filters.search, mode: "insensitive" } },
+        { domain: { contains: filters.search, mode: "insensitive" } },
+        { industry: { contains: filters.search, mode: "insensitive" } },
+      ],
+    }),
+    ...(filters.industry?.length && { industry: { in: filters.industry } }),
+    ...(filters.companyType?.length && { companyType: { in: filters.companyType as any } }),
+    ...(filters.accountTier?.length && { accountTier: { in: filters.accountTier as any } }),
+    ...(filters.fundingStage?.length && { fundingStage: { in: filters.fundingStage as any } }),
+    ...(filters.hqCountry?.length && { hqCountry: { in: filters.hqCountry } }),
+    ...(filters.employeeCountMin !== undefined && { employeeCount: { gte: filters.employeeCountMin } }),
+    ...(filters.employeeCountMax !== undefined && {
+      employeeCount: filters.employeeCountMin !== undefined
+        ? { gte: filters.employeeCountMin, lte: filters.employeeCountMax }
+        : { lte: filters.employeeCountMax },
+    }),
+    ...(filters.accountOwnerId?.length && { accountOwnerId: { in: filters.accountOwnerId } }),
+  };
 
   const skip = (pagination.page - 1) * pagination.limit;
   const [data, total] = await Promise.all([

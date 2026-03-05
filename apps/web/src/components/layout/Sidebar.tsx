@@ -11,6 +11,7 @@ import {
   Settings,
   Zap,
   LogOut,
+  Puzzle,
 } from "lucide-react";
 import { cn } from "@opensales/ui";
 import { useAuthStore } from "@/store/auth.store";
@@ -27,6 +28,7 @@ const navItems = [
 
 const bottomItems = [
   { href: "/integrations", label: "Integrations", icon: Zap },
+  { href: "/settings/integrations", label: "API & ICP", icon: Puzzle },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

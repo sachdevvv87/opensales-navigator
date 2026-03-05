@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ContactFilterSchema } from "./contact";
 
 export const ListTypeEnum = z.enum(["STATIC", "SMART"]);
 export const ListPermissionEnum = z.enum(["OWNER", "EDITOR", "VIEWER"]);
@@ -17,6 +18,14 @@ export const AddToListSchema = z.object({
   entityIds: z.array(z.string()).min(1),
 });
 
+export const SmartListFilterConfigSchema = ContactFilterSchema.omit({
+  page: true,
+  limit: true,
+  sortBy: true,
+  sortOrder: true,
+});
+
 export type ListCreateInput = z.infer<typeof ListCreateSchema>;
 export type ListUpdateInput = z.infer<typeof ListUpdateSchema>;
 export type AddToListInput = z.infer<typeof AddToListSchema>;
+export type SmartListFilterConfig = z.infer<typeof SmartListFilterConfigSchema>;

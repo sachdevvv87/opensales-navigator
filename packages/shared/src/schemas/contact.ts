@@ -51,13 +51,17 @@ export const ContactFilterSchema = z.object({
   assignedToId: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   locationCountry: z.array(z.string()).optional(),
-  leadScoreMin: z.number().int().min(0).max(100).optional(),
-  leadScoreMax: z.number().int().min(0).max(100).optional(),
+  leadScoreMin: z.number().min(0).max(100).optional(),
+  leadScoreMax: z.number().min(0).max(100).optional(),
   createdAfter: z.string().datetime().optional(),
   createdBefore: z.string().datetime().optional(),
   listId: z.string().optional(),
   hasEmail: z.boolean().optional(),
   hasPhone: z.boolean().optional(),
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
 export const BulkActionSchema = z.object({
@@ -72,8 +76,18 @@ export const CsvImportSchema = z.object({
   autoEnrich: z.boolean().default(false),
 });
 
+export const IcpConfigSchema = z.object({
+  targetTitles: z.array(z.string()).default([]),
+  targetSeniorities: z.array(SeniorityEnum).default([]),
+  targetIndustries: z.array(z.string()).default([]),
+  targetCompanySizes: z.array(z.string()).default([]),
+  targetLocations: z.array(z.string()).default([]),
+});
+
 export type ContactCreateInput = z.infer<typeof ContactCreateSchema>;
 export type ContactUpdateInput = z.infer<typeof ContactUpdateSchema>;
+export type ContactFilter = z.infer<typeof ContactFilterSchema>;
 export type ContactFilterInput = z.infer<typeof ContactFilterSchema>;
 export type BulkActionInput = z.infer<typeof BulkActionSchema>;
 export type CsvImportInput = z.infer<typeof CsvImportSchema>;
+export type IcpConfig = z.infer<typeof IcpConfigSchema>;

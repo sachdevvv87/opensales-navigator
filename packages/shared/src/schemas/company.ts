@@ -50,13 +50,20 @@ export const CompanyFilterSchema = z.object({
   industry: z.array(z.string()).optional(),
   companyType: z.array(CompanyTypeEnum).optional(),
   accountTier: z.array(AccountTierEnum).optional(),
-  fundingStage: z.array(FundingStageEnum).optional(),
+  fundingStage: z.array(z.string()).optional(),
   hqCountry: z.array(z.string()).optional(),
-  employeeCountMin: z.number().optional(),
+  employeeCountMin: z.number().min(0).optional(),
   employeeCountMax: z.number().optional(),
   accountOwnerId: z.array(z.string()).optional(),
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(25),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
 export type CompanyCreateInput = z.infer<typeof CompanyCreateSchema>;
 export type CompanyUpdateInput = z.infer<typeof CompanyUpdateSchema>;
+export type CompanyFilter = z.infer<typeof CompanyFilterSchema>;
 export type CompanyFilterInput = z.infer<typeof CompanyFilterSchema>;
+export type CompanyType = z.infer<typeof CompanyTypeEnum>;
+export type AccountTier = z.infer<typeof AccountTierEnum>;
