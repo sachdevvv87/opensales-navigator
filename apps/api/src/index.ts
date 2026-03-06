@@ -19,6 +19,7 @@ import { notificationsRoutes } from "./routes/notifications";
 import { adminRoutes } from "./routes/admin";
 import { enrichmentRoutes } from "./routes/enrichment";
 import { crmRoutes } from "./routes/crm";
+import { analyticsRoutes } from "./routes/analytics";
 
 const server = Fastify({
   logger: {
@@ -72,6 +73,7 @@ async function buildServer() {
   await server.register(adminRoutes, { prefix: "/api/v1/admin" });
   await server.register(enrichmentRoutes, { prefix: "/api/v1/enrichment" });
   await server.register(crmRoutes, { prefix: "/api/v1/crm" });
+  await server.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
 
   return server;
 }
