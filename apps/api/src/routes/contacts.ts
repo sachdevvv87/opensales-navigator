@@ -182,4 +182,33 @@ export const contactsRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { created, skipped, total: records.length };
   });
+
+  // GET /contacts/export — CSV download of all contacts
+  fastify.get("/export", async (_request, reply) => {
+    const orgId = orgScope(_request);
+    const contacts = await prisma.contact.findMany({
+      where: { orgId, deletedAt: null },
+      include: { company: { select: { name: true } } },
+      orderBy: { lastName: "asc" },
+      take: 10000,
+    });
+
+    const escape = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return s.includes(",") || s.includes('"') || s.includes("\n")
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+
+    const headers = ["firstName", "lastName", "email", "phone", "title", "seniority", "department", "company", "locationCity", "locationCountry", "leadStage", "leadScore", "tags", "source", "linkedinUrl"];
+    const rows = contacts.map((c) =>
+      [c.firstName, c.lastName, c.email, c.phone, c.title, c.seniority, c.department, c.company?.name, c.locationCity, c.locationCountry, c.leadStage, c.leadScore, c.tags.join("|"), c.source, c.linkedinUrl]
+        .map(escape).join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    reply.header("Content-Type", "text/csv");
+    reply.header("Content-Disposition", "attachment; filename=\"contacts.csv\"");
+    return reply.send(csv);
+  });
 };

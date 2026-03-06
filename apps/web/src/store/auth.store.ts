@@ -22,6 +22,7 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   setAuth: (user: User, org: Org, accessToken: string, refreshToken: string) => void;
+  setUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ user, org, accessToken, refreshToken, isAuthenticated: true });
       },
+      setUser: (user) => set((s) => ({ ...s, user })),
       logout: () => {
         if (typeof window !== "undefined") {
           localStorage.removeItem("accessToken");

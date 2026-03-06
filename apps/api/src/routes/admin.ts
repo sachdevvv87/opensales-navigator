@@ -101,6 +101,29 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // GET /admin/audit-log
+  fastify.get("/audit-log", { preHandler: requireRole("ORG_ADMIN") }, async (request) => {
+    const orgId = orgScope(request);
+    const query = request.query as { page?: string; entityType?: string; userId?: string };
+    const page = Math.max(1, parseInt(query.page ?? "1"));
+    const limit = 50;
+    const where: Record<string, unknown> = { orgId };
+    if (query.entityType) where.entityType = query.entityType;
+    if (query.userId) where.userId = query.userId;
+
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { user: { select: { id: true, name: true, email: true } } },
+      }),
+    ]);
+    return { data: logs, total, page, pages: Math.ceil(total / limit) };
+  });
+
   // GET /admin/analytics/dashboard
   fastify.get("/analytics/dashboard", { preHandler: requireRole("ORG_ADMIN", "MANAGER", "SALES_REP") }, async (request) => {
     const orgId = orgScope(request);

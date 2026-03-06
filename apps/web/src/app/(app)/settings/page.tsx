@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { User, Building2, Users, Zap, Bell } from "lucide-react";
+import { User, Building2, Users, Zap, Bell, ScrollText } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@opensales/ui";
 
 const settingsSections = [
@@ -8,6 +8,7 @@ const settingsSections = [
   { href: "/settings/team", title: "Team", description: "Invite team members and manage roles", icon: Users },
   { href: "/integrations", title: "Integrations", description: "Connect CRM tools and enrichment APIs", icon: Zap },
   { href: "/settings/notifications", title: "Notifications", description: "Configure SMTP, Slack, and webhook alerts", icon: Bell },
+  { href: "/settings/audit-log", title: "Audit Log", description: "Review all create, update, and delete actions", icon: ScrollText },
 ];
 
 export default function SettingsPage() {

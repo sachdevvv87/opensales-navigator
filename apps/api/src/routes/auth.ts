@@ -83,6 +83,37 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // PATCH /auth/me — update own profile (name, email, password)
+  fastify.patch("/me", { preHandler: requireAuth }, async (request, reply) => {
+    const { name, email, currentPassword, newPassword } = request.body as {
+      name?: string;
+      email?: string;
+      currentPassword?: string;
+      newPassword?: string;
+    };
+    const userId = request.user.userId;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return reply.code(404).send({ error: "User not found" });
+
+    const updates: Record<string, unknown> = {};
+    if (name?.trim()) updates.name = name.trim();
+    if (email?.trim()) updates.email = email.trim().toLowerCase();
+
+    if (newPassword) {
+      if (!currentPassword) return reply.code(400).send({ error: "Current password required" });
+      const valid = await verifyPassword(currentPassword, user.passwordHash);
+      if (!valid) return reply.code(401).send({ error: "Current password is incorrect" });
+      updates.passwordHash = await hashPassword(newPassword);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updates,
+      select: { id: true, email: true, name: true, role: true, avatarUrl: true },
+    });
+    return updated;
+  });
+
   // POST /auth/logout
   fastify.post("/logout", { preHandler: requireAuth }, async () => {
     return { message: "Logged out successfully" };

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Upload, Search, MoreHorizontal, Trash2, Bookmark } from "lucide-react";
+import { Plus, Upload, Search, MoreHorizontal, Trash2, Bookmark, Download } from "lucide-react";
 import { Button, Input, Badge, Skeleton } from "@opensales/ui";
 import { useContacts, useBulkAction, type Contact, type ContactsParams } from "@/hooks/useContacts";
 import { FilterPanel } from "@/components/contacts/FilterPanel";
@@ -68,6 +68,14 @@ export default function ContactsPage() {
           )}
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/v1/contacts/export`; }}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href="/contacts/import">
               <Upload className="w-4 h-4 mr-2" />

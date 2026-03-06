@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Building2 } from "lucide-react";
+import { Plus, Search, Building2, Download } from "lucide-react";
 import { Button, Input, Badge, Skeleton } from "@opensales/ui";
 import { useCompanies } from "@/hooks/useCompanies";
 
@@ -17,7 +17,17 @@ export default function CompaniesPage() {
           <h1 className="text-2xl font-bold">Companies</h1>
           {data && <p className="text-muted-foreground text-sm">{data.pagination.total.toLocaleString()} total</p>}
         </div>
-        <Button size="sm"><Plus className="w-4 h-4 mr-2" />Add Company</Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/v1/companies/export`; }}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button size="sm"><Plus className="w-4 h-4 mr-2" />Add Company</Button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
