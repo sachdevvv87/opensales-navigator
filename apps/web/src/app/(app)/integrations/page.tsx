@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, X, Search, Download, AlertTriangle, RefreshCw, Unplug, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Eye, EyeOff, X, Search, Download, AlertTriangle, RefreshCw, Unplug, CheckCircle2, Linkedin, Upload, Users, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -35,6 +35,16 @@ import {
   type ProspectResult,
 } from "@/hooks/useEnrichment";
 import { useCrmConnections, useDisconnectCrm, useSyncCrm, useCrmSyncLog } from "@/hooks/useCrm";
+import {
+  useLinkedInStatus,
+  useLinkedInOAuthUrl,
+  useDisconnectLinkedIn,
+  useSyncLinkedInProfile,
+  usePreviewLinkedInCsv,
+  useImportLinkedInCsv,
+  useLinkedInImportLogs,
+  type CsvPreview,
+} from "@/hooks/useLinkedIn";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -683,6 +693,335 @@ function HubSpotCard() {
   );
 }
 
+// ── LinkedIn CSV Import Wizard ────────────────────────────────────────────────
+
+function LinkedInImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewCsv = usePreviewLinkedInCsv();
+  const importCsv = useImportLinkedInCsv();
+  const { data: logs = [] } = useLinkedInImportLogs();
+
+  const [step, setStep] = useState<"upload" | "preview" | "done">("upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<CsvPreview | null>(null);
+  const [result, setResult] = useState<{ imported: number; skipped: number; failed: number } | null>(null);
+
+  function reset() {
+    setStep("upload");
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    previewCsv.reset();
+    importCsv.reset();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    try {
+      const data = await previewCsv.mutateAsync(f);
+      setPreview(data);
+      setStep("preview");
+    } catch (err: any) {
+      toast.error(err.message ?? "Invalid CSV format");
+    }
+  }
+
+  async function handleImport() {
+    if (!file) return;
+    try {
+      const data = await importCsv.mutateAsync(file);
+      setResult(data);
+      setStep("done");
+    } catch (err: any) {
+      toast.error(err.message ?? "Import failed");
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+            Import LinkedIn Connections
+          </DialogTitle>
+        </DialogHeader>
+
+        {step === "upload" && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm space-y-2">
+              <p className="font-medium text-blue-900 dark:text-blue-200">How to export your LinkedIn connections:</p>
+              <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-300">
+                <li>Go to <strong>LinkedIn → Settings &amp; Privacy</strong></li>
+                <li>Click <strong>Data privacy → Get a copy of your data</strong></li>
+                <li>Select <strong>Connections</strong> and request the export</li>
+                <li>Download the <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">Connections.csv</code> file</li>
+                <li>Upload it here to import your connections as contacts</li>
+              </ol>
+            </div>
+
+            <div
+              className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-3" />
+              <p className="font-medium text-sm">Click to upload Connections.csv</p>
+              <p className="text-xs text-muted-foreground mt-1">CSV exported from LinkedIn</p>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            {previewCsv.isPending && (
+              <p className="text-center text-sm text-muted-foreground animate-pulse">Parsing CSV…</p>
+            )}
+
+            {logs.length > 0 && (
+              <div className="border border-border rounded-lg p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Previous Imports</p>
+                <div className="space-y-1">
+                  {logs.slice(0, 3).map((log) => (
+                    <div key={log.id} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{new Date(log.createdAt).toLocaleDateString()}</span>
+                      <span>{log.imported} imported · {log.skipped} skipped · {log.failed} failed</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {step === "preview" && preview && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <Users className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm">
+                Found <strong>{preview.total}</strong> connections in the file.
+              </p>
+            </div>
+
+            <div className="border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Name</th>
+                    <th className="text-left p-2 font-medium">Company</th>
+                    <th className="text-left p-2 font-medium">Position</th>
+                    <th className="text-left p-2 font-medium">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.preview.map((c, i) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="p-2">{c.firstName} {c.lastName}</td>
+                      <td className="p-2 text-muted-foreground truncate max-w-[100px]">{c.company || "—"}</td>
+                      <td className="p-2 text-muted-foreground truncate max-w-[100px]">{c.position || "—"}</td>
+                      <td className="p-2 text-muted-foreground">{c.emailAddress || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.total > 5 && (
+                <p className="text-xs text-muted-foreground text-center p-2 border-t border-border">
+                  … and {preview.total - 5} more
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={reset} disabled={importCsv.isPending}>
+                <RotateCcw className="w-4 h-4 mr-1" /> Choose Different File
+              </Button>
+              <Button onClick={handleImport} disabled={importCsv.isPending}>
+                {importCsv.isPending ? "Importing…" : `Import ${preview.total} Connections`}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "done" && result && (
+          <div className="space-y-4 text-center py-4">
+            <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto" />
+            <div>
+              <p className="font-semibold text-lg">Import Complete!</p>
+              <p className="text-sm text-muted-foreground mt-1">Your LinkedIn connections have been imported.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3">
+                <p className="text-2xl font-bold text-green-600">{result.imported}</p>
+                <p className="text-xs text-muted-foreground">Imported</p>
+              </div>
+              <div className="bg-yellow-50 dark:bg-yellow-950/30 rounded-lg p-3">
+                <p className="text-2xl font-bold text-yellow-600">{result.skipped}</p>
+                <p className="text-xs text-muted-foreground">Already existed</p>
+              </div>
+              <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3">
+                <p className="text-2xl font-bold text-red-600">{result.failed}</p>
+                <p className="text-xs text-muted-foreground">Failed</p>
+              </div>
+            </div>
+            <Button onClick={() => { reset(); onClose(); }}>Done</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── LinkedIn Card ──────────────────────────────────────────────────────────────
+
+function LinkedInCard() {
+  const { data: status, isLoading } = useLinkedInStatus();
+  const getOAuthUrl = useLinkedInOAuthUrl();
+  const disconnect = useDisconnectLinkedIn();
+  const syncProfile = useSyncLinkedInProfile();
+  const [importOpen, setImportOpen] = useState(false);
+
+  async function handleConnect() {
+    try {
+      const { url } = await getOAuthUrl.mutateAsync();
+      window.location.href = url;
+    } catch (err: any) {
+      if (err.message?.includes("not configured")) {
+        toast.error("LinkedIn OAuth not configured. Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET in .env");
+      } else {
+        toast.error(err.message ?? "Could not connect LinkedIn");
+      }
+    }
+  }
+
+  if (isLoading) {
+    return <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Loading…</CardContent></Card>;
+  }
+
+  return (
+    <>
+      <Card className={!status?.configured ? "opacity-80" : ""}>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+              <CardTitle className="text-base">LinkedIn</CardTitle>
+            </div>
+            {status?.connected ? (
+              <Badge variant="success" className="text-xs shrink-0">Connected</Badge>
+            ) : status?.configured ? (
+              <Badge variant="secondary" className="text-xs shrink-0">Not connected</Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs shrink-0">Setup required</Badge>
+            )}
+          </div>
+          <CardDescription>
+            Connect your LinkedIn account and import connections as contacts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {status?.connected && status.account ? (
+            <>
+              <div className="flex items-center gap-3">
+                {status.account.pictureUrl ? (
+                  <img src={status.account.pictureUrl} alt="" className="w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#0A66C2] flex items-center justify-center text-white text-sm font-bold">
+                    {status.account.name?.[0]}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-medium">{status.account.name}</p>
+                  {status.account.email && <p className="text-xs text-muted-foreground">{status.account.email}</p>}
+                </div>
+              </div>
+              {status.account.lastSyncAt && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  Last synced {new Date(status.account.lastSyncAt).toLocaleString()}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => setImportOpen(true)}
+                  className="gap-1.5 bg-[#0A66C2] hover:bg-[#004182] text-white"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Import Connections
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => syncProfile.mutate()}
+                  disabled={syncProfile.isPending}
+                  className="gap-1.5"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncProfile.isPending ? "animate-spin" : ""}`} />
+                  Sync Profile
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive gap-1.5"
+                  onClick={() => disconnect.mutate(undefined, {
+                    onSuccess: () => toast.success("LinkedIn disconnected"),
+                    onError: () => toast.error("Failed to disconnect"),
+                  })}
+                  disabled={disconnect.isPending}
+                >
+                  <Unplug className="h-3.5 w-3.5" />
+                  Disconnect
+                </Button>
+              </div>
+            </>
+          ) : status?.configured ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Connect your LinkedIn account to import connections as contacts using your own exported CSV.
+              </p>
+              <Button
+                size="sm"
+                onClick={handleConnect}
+                disabled={getOAuthUrl.isPending}
+                className="gap-2 bg-[#0A66C2] hover:bg-[#004182] text-white"
+              >
+                <Linkedin className="h-4 w-4" />
+                Connect LinkedIn
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-3 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-medium mb-1">LinkedIn OAuth setup required</p>
+                <p>Add these to your <code>.env</code> file:</p>
+                <pre className="mt-1 font-mono bg-amber-100 dark:bg-amber-900/50 rounded p-2">
+{`LINKEDIN_CLIENT_ID=your_app_id
+LINKEDIN_CLIENT_SECRET=your_secret
+LINKEDIN_REDIRECT_URI=http://localhost:4000/api/v1/linkedin/oauth/callback`}
+                </pre>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                You can still import connections via CSV without OAuth —{" "}
+                <button
+                  className="text-primary underline"
+                  onClick={() => setImportOpen(true)}
+                >
+                  import CSV directly
+                </button>
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <LinkedInImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
+    </>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
@@ -690,6 +1029,19 @@ export default function IntegrationsPage() {
   const { data: enrichmentStatus } = useEnrichmentStatus();
   const { mutate: saveApiKeys, isPending: isSavingKeys } = useSaveApiKeys();
   const [savingProvider, setSavingProvider] = useState<string | null>(null);
+
+  // Handle LinkedIn OAuth callback query params
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("linkedin_connected")) {
+      toast.success("LinkedIn connected successfully!");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("linkedin_error")) {
+      toast.error(`LinkedIn connection failed: ${decodeURIComponent(params.get("linkedin_error")!)}`);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const icp: IcpConfig = (orgData?.settings?.icp as IcpConfig) ?? {};
 
@@ -765,6 +1117,22 @@ export default function IntegrationsPage() {
               </CardHeader>
             </Card>
           ))}
+        </div>
+      </section>
+
+      {/* LinkedIn */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Linkedin className="w-5 h-5 text-[#0A66C2]" />
+            LinkedIn
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Connect your LinkedIn account and import your connections as contacts via CSV export.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <LinkedInCard />
         </div>
       </section>
 

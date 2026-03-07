@@ -125,9 +125,11 @@ model Organization {
   alertRules         AlertRule[]
   auditLogs          AuditLog[]
   crmConnections     CrmConnection[]
-  dealStages         DealStage[]
-  deals              Deal[]
-  emailSequences     EmailSequence[]
+  dealStages          DealStage[]
+  deals               Deal[]
+  emailSequences      EmailSequence[]
+  linkedInAccounts    LinkedInAccount[]
+  linkedInImportLogs  LinkedInImportLog[]
 
   @@map("organizations")
 }
@@ -158,8 +160,10 @@ model User {
   listPermissions   ListPermission_[]
   savedSearches     SavedSearch[]
   auditLogs         AuditLog[]
-  ownedDeals        Deal[]            @relation("DealOwner")
-  emailSequences    EmailSequence[]
+  ownedDeals          Deal[]              @relation("DealOwner")
+  emailSequences      EmailSequence[]
+  linkedInAccount     LinkedInAccount?
+  linkedInImportLogs  LinkedInImportLog[]
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -610,4 +614,51 @@ model SequenceEnrollment {
   @@index([sequenceId])
   @@index([contactId])
   @@map("sequence_enrollments")
+}
+
+// ─── LINKEDIN ─────────────────────────────────────────────────────────────────
+
+model LinkedInAccount {
+  id              String    @id @default(cuid())
+  userId          String    @unique @map("user_id")
+  orgId           String    @map("org_id")
+  linkedInId      String    @map("linkedin_id")
+  name            String
+  email           String?
+  headline        String?
+  pictureUrl      String?   @map("picture_url")
+  profileUrl      String?   @map("profile_url")
+  accessToken     String    @map("access_token")
+  refreshToken    String?   @map("refresh_token")
+  expiresAt       DateTime? @map("expires_at")
+  scopes          String[]
+  lastSyncAt      DateTime? @map("last_sync_at")
+  connectionsCount Int?     @map("connections_count")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User         @relation(fields: [userId], references: [id])
+  org  Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@map("linkedin_accounts")
+}
+
+model LinkedInImportLog {
+  id          String   @id @default(cuid())
+  orgId       String   @map("org_id")
+  userId      String   @map("user_id")
+  fileName    String   @map("file_name")
+  totalRows   Int      @map("total_rows")
+  imported    Int      @default(0)
+  skipped     Int      @default(0)
+  failed      Int      @default(0)
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  org  Organization @relation(fields: [orgId], references: [id])
+  user User         @relation(fields: [userId], references: [id])
+
+  @@index([orgId])
+  @@map("linkedin_import_logs")
 }

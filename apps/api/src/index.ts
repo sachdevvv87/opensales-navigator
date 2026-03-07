@@ -22,6 +22,7 @@ import { crmRoutes } from "./routes/crm";
 import { analyticsRoutes } from "./routes/analytics";
 import { dealsRoutes } from "./routes/deals";
 import { sequencesRoutes } from "./routes/sequences";
+import { linkedInRoutes } from "./routes/linkedin";
 
 const server = Fastify({
   logger: {
@@ -78,6 +79,7 @@ async function buildServer() {
   await server.register(analyticsRoutes, { prefix: "/api/v1/analytics" });
   await server.register(dealsRoutes, { prefix: "/api/v1/deals" });
   await server.register(sequencesRoutes, { prefix: "/api/v1/sequences" });
+  await server.register(linkedInRoutes, { prefix: "/api/v1/linkedin" });
 
   return server;
 }
