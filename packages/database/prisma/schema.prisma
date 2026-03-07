@@ -82,6 +82,28 @@ enum FundingStage {
   UNKNOWN
 }
 
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+
+enum SequenceStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  REPLIED
+  UNSUBSCRIBED
+  BOUNCED
+  PAUSED
+}
+
 // ─── ORGANIZATIONS ────────────────────────────────────────────────────────────
 
 model Organization {
@@ -92,17 +114,20 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users         User[]
-  invitations   Invitation[]
-  contacts      Contact[]
-  companies     Company[]
-  lists         List[]
-  savedSearches SavedSearch[]
-  activities    Activity[]
-  notifications Notification[]
-  alertRules    AlertRule[]
-  auditLogs      AuditLog[]
-  crmConnections CrmConnection[]
+  users              User[]
+  invitations        Invitation[]
+  contacts           Contact[]
+  companies          Company[]
+  lists              List[]
+  savedSearches      SavedSearch[]
+  activities         Activity[]
+  notifications      Notification[]
+  alertRules         AlertRule[]
+  auditLogs          AuditLog[]
+  crmConnections     CrmConnection[]
+  dealStages         DealStage[]
+  deals              Deal[]
+  emailSequences     EmailSequence[]
 
   @@map("organizations")
 }
@@ -124,15 +149,17 @@ model User {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  org               Organization   @relation(fields: [orgId], references: [id])
-  assignedContacts  Contact[]      @relation("AssignedContacts")
-  createdContacts   Contact[]      @relation("CreatedContacts")
+  org               Organization      @relation(fields: [orgId], references: [id])
+  assignedContacts  Contact[]         @relation("AssignedContacts")
+  createdContacts   Contact[]         @relation("CreatedContacts")
   ownedCompanies    Company[]
   activities        Activity[]
   notifications     Notification[]
   listPermissions   ListPermission_[]
   savedSearches     SavedSearch[]
   auditLogs         AuditLog[]
+  ownedDeals        Deal[]            @relation("DealOwner")
+  emailSequences    EmailSequence[]
 
   @@unique([orgId, email])
   @@index([orgId])
@@ -187,11 +214,12 @@ model Company {
   updatedAt       DateTime    @updatedAt @map("updated_at")
   deletedAt       DateTime?   @map("deleted_at")
 
-  org          Organization @relation(fields: [orgId], references: [id])
-  accountOwner User?        @relation(fields: [accountOwnerId], references: [id])
+  org          Organization        @relation(fields: [orgId], references: [id])
+  accountOwner User?               @relation(fields: [accountOwnerId], references: [id])
   contacts     Contact[]
-  activities   Activity[]   @relation("CompanyActivities")
+  activities   Activity[]          @relation("CompanyActivities")
   listMembers  ListMemberCompany[]
+  deals        Deal[]
 
   @@index([orgId])
   @@index([domain])
@@ -231,14 +259,16 @@ model Contact {
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
 
-  org         Organization @relation(fields: [orgId], references: [id])
-  assignedTo  User?        @relation("AssignedContacts", fields: [assignedToId], references: [id])
-  createdBy   User         @relation("CreatedContacts", fields: [createdById], references: [id])
-  company     Company?     @relation(fields: [companyId], references: [id])
-  emails      ContactEmail[]
-  phones      ContactPhone[]
-  activities  Activity[]   @relation("ContactActivities")
-  listMembers ListMemberContact[]
+  org          Organization        @relation(fields: [orgId], references: [id])
+  assignedTo   User?               @relation("AssignedContacts", fields: [assignedToId], references: [id])
+  createdBy    User                @relation("CreatedContacts", fields: [createdById], references: [id])
+  company      Company?            @relation(fields: [companyId], references: [id])
+  emails       ContactEmail[]
+  phones       ContactPhone[]
+  activities   Activity[]          @relation("ContactActivities")
+  listMembers  ListMemberContact[]
+  deals        Deal[]
+  enrollments  SequenceEnrollment[]
 
   @@index([orgId])
   @@index([email])
@@ -475,4 +505,109 @@ model CrmSyncLog {
   @@index([connectionId])
   @@index([entityType, entityId])
   @@map("crm_sync_log")
+}
+
+// ─── DEAL PIPELINE ────────────────────────────────────────────────────────────
+
+model DealStage {
+  id        String   @id @default(cuid())
+  orgId     String   @map("org_id")
+  name      String
+  order     Int      @default(0)
+  color     String   @default("#6366f1")
+  isClosed  Boolean  @default(false) @map("is_closed")
+  isWon     Boolean  @default(false) @map("is_won")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  org   Organization @relation(fields: [orgId], references: [id])
+  deals Deal[]
+
+  @@index([orgId])
+  @@map("deal_stages")
+}
+
+model Deal {
+  id          String     @id @default(cuid())
+  orgId       String     @map("org_id")
+  name        String
+  value       Float?
+  currency    String     @default("USD")
+  status      DealStatus @default(OPEN)
+  stageId     String     @map("stage_id")
+  probability Int?
+  closeDate   DateTime?  @map("close_date")
+  contactId   String?    @map("contact_id")
+  companyId   String?    @map("company_id")
+  ownerId     String     @map("owner_id")
+  notes       String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  org     Organization @relation(fields: [orgId], references: [id])
+  stage   DealStage    @relation(fields: [stageId], references: [id])
+  contact Contact?     @relation(fields: [contactId], references: [id])
+  company Company?     @relation(fields: [companyId], references: [id])
+  owner   User         @relation("DealOwner", fields: [ownerId], references: [id])
+
+  @@index([orgId])
+  @@index([stageId])
+  @@index([contactId])
+  @@index([companyId])
+  @@map("deals")
+}
+
+// ─── EMAIL SEQUENCES ──────────────────────────────────────────────────────────
+
+model EmailSequence {
+  id          String         @id @default(cuid())
+  orgId       String         @map("org_id")
+  name        String
+  description String?
+  status      SequenceStatus @default(DRAFT)
+  createdById String         @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  org         Organization         @relation(fields: [orgId], references: [id])
+  createdBy   User                 @relation(fields: [createdById], references: [id])
+  steps       SequenceStep[]
+  enrollments SequenceEnrollment[]
+
+  @@index([orgId])
+  @@map("email_sequences")
+}
+
+model SequenceStep {
+  id          String   @id @default(cuid())
+  sequenceId  String   @map("sequence_id")
+  order       Int
+  subject     String
+  body        String
+  delayDays   Int      @default(0) @map("delay_days")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  sequence    EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([sequenceId])
+  @@map("sequence_steps")
+}
+
+model SequenceEnrollment {
+  id              String           @id @default(cuid())
+  sequenceId      String           @map("sequence_id")
+  contactId       String           @map("contact_id")
+  status          EnrollmentStatus @default(ACTIVE)
+  currentStep     Int              @default(0) @map("current_step")
+  nextSendAt      DateTime?        @map("next_send_at")
+  startedAt       DateTime         @default(now()) @map("started_at")
+  completedAt     DateTime?        @map("completed_at")
+
+  sequence EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contact  Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, contactId])
+  @@index([sequenceId])
+  @@index([contactId])
+  @@map("sequence_enrollments")
 }

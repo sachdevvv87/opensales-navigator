@@ -52,6 +52,13 @@ export interface SearchIndexSyncJobData {
   operation: "upsert" | "delete";
 }
 
+export interface SequenceStepJobData {
+  enrollmentId: string;
+  sequenceId: string;
+  contactId: string;
+  stepOrder: number;
+}
+
 // BullMQ bundles its own ioredis version - cast to avoid cross-version type conflict
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const conn = () => getRedisConnection() as any;
@@ -104,5 +111,15 @@ export const searchSyncQueue = new Queue<SearchIndexSyncJobData>("search-sync", 
     attempts: 3,
     backoff: { type: "exponential", delay: 5000 },
     removeOnComplete: 1000,
+  },
+});
+
+export const sequenceQueue = new Queue<SequenceStepJobData>("sequence-steps", {
+  connection: conn(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 10000 },
+    removeOnComplete: 500,
+    removeOnFail: 200,
   },
 });

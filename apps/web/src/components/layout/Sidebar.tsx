@@ -12,6 +12,8 @@ import {
   Zap,
   LogOut,
   Puzzle,
+  KanbanSquare,
+  Mail,
 } from "lucide-react";
 import { cn } from "@opensales/ui";
 import { useAuthStore } from "@/store/auth.store";
@@ -21,8 +23,10 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/companies", label: "Companies", icon: Building2 },
+  { href: "/deals", label: "Deals", icon: KanbanSquare },
   { href: "/lists", label: "Lists", icon: List },
   { href: "/activities", label: "Activities", icon: CheckSquare },
+  { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 

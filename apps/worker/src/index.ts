@@ -4,6 +4,7 @@ config({ path: resolve(process.cwd(), "../../.env") });
 import { createCsvImportWorker } from "./workers/csv-import.worker";
 import { createAuditWorker } from "./workers/audit.worker";
 import { createNotificationWorker } from "./workers/notification.worker";
+import { createSequenceWorker } from "./workers/sequence.worker";
 import { closeRedisConnection } from "./redis";
 import { prisma } from "@opensales/database";
 
@@ -13,11 +14,13 @@ console.log("🚀 Starting OpenSales Navigator workers...");
 const csvImportWorker = createCsvImportWorker();
 const auditWorker = createAuditWorker();
 const notificationWorker = createNotificationWorker();
+const sequenceWorker = createSequenceWorker();
 
 console.log("✅ Workers started:");
 console.log("   - csv-import worker (concurrency: 2)");
 console.log("   - audit worker (concurrency: 10)");
 console.log("   - notification worker (concurrency: 5)");
+console.log("   - sequence-steps worker (concurrency: 5)");
 
 // Graceful shutdown
 async function shutdown(signal: string) {
@@ -26,6 +29,7 @@ async function shutdown(signal: string) {
     csvImportWorker.close(),
     auditWorker.close(),
     notificationWorker.close(),
+    sequenceWorker.close(),
   ]);
   await closeRedisConnection();
   await prisma.$disconnect();
